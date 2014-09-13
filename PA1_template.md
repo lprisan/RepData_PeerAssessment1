@@ -1,8 +1,8 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
 output: 
-  html_document:
-    keep_md: true
+html_document:
+keep_md: true
 ---
 
 
@@ -13,10 +13,10 @@ Since the dataset comes in a zip file (included in the repository), the loading 
 1. Unzip the file
 2. Load the data using ```read.csv()```
 3. Preprocess the data:
-    * Pad the interval field with zeroes (e.g. "0005"), for later conversion to a time
-    * Join date and (padded) interval/time to produce a valid POSIXct field (```datetime```)
-    * Create the "clean" dataset with the number of ```steps```, the ```date``` (as an R date), the ```interval``` (as a factor) and the (POSIXct) ```datetime```
-    
+* Pad the interval field with zeroes (e.g. "0005"), for later conversion to a time
+* Join date and (padded) interval/time to produce a valid POSIXct field (```datetime```)
+* Create the "clean" dataset with the number of ```steps```, the ```date``` (as an R date), the ```interval``` (as a factor) and the (POSIXct) ```datetime```
+
 
 
 ```r
@@ -47,7 +47,7 @@ In order to understand this question, we take the following steps:
 
 ```r
 ag <- aggregate(steps ~ date,data=data,FUN="sum")
-barplot(ag$steps)
+barplot(ag$steps, main="Total number of steps per day")
 abline(mean(ag$steps),0,col="red")
 abline(median(ag$steps),0,col="blue")
 ```
@@ -55,7 +55,7 @@ abline(median(ag$steps),0,col="blue")
 ![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
 
 ```r
-mean(ag$steps)
+print(dailymean <- mean(ag$steps))
 ```
 
 ```
@@ -63,7 +63,7 @@ mean(ag$steps)
 ```
 
 ```r
-median(ag$steps)
+print(dailymedian <- median(ag$steps))
 ```
 
 ```
@@ -76,7 +76,7 @@ To see the average daily patterns, we:
 
 1. Aggregate the steps data, in this case using the ```interval``` factor and the ```mean``` function
 2. We do a line plot of the resulting values
-3. We extract the maximum value of this aggregation, to see which is the daily interval of maximum activity
+3. We extract the interval with the maximum value of this aggregation, to see which is the daily interval of maximum activity, and its average step value
 
 
 ```r
@@ -106,6 +106,91 @@ max(ag2$steps)
 
 ## Imputing missing values
 
+To complete the missing values that might be influencing our results, we do the following:
 
+1. Calculate the total number of missing values in the dataset
+2. Fill in the missing values with the average of that interval for the rest of the days
+3. We create a new dataset with these missing values filled in
+4. We make a histogram of the total steps per day in this new dataset, adding lines marking the mean and median of these values
+5. We report the impact (in %) of the filling in of missing values onto the mean and median of the total daily steps
+
+
+```r
+missing <- sum(is.na(data$steps))
+print(paste("Data has",missing,"missing values (",missing*100/nrow(data),"%)"))
+```
+
+```
+## [1] "Data has 2304 missing values ( 13.1147540983607 %)"
+```
+
+```r
+filled.data <- data.frame(data)
+for (i in 1:nrow(filled.data)){
+    if(is.na(filled.data[i,"steps"])){
+        filled.data[i,"steps"] <- ag2[ag2$interval==filled.data[i,"interval"],"steps"] # We assign the average of steps in that interval
+    }
+}
+# We check that now all cases are complete
+missing <- sum(is.na(filled.data$steps))
+print(paste("Filled data has",missing,"missing values (",missing*100/nrow(filled.data),"%)"))
+```
+
+```
+## [1] "Filled data has 0 missing values ( 0 %)"
+```
+
+```r
+filled.ag <- aggregate(steps ~ date,data=filled.data,FUN="sum")
+barplot(filled.ag$steps, main="Total number of steps per day (filled-in data)")
+abline(mean(filled.ag$steps),0,col="red")
+abline(median(filled.ag$steps),0,col="blue")
+```
+
+![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4.png) 
+
+```r
+newmean <- mean(filled.ag$steps)
+newmedian <- median(filled.ag$steps)
+
+print(paste("There is a variation of",(dailymean-newmean)*100/dailymean,"% in the mean daily number of steps, and of",(dailymedian-newmedian)*100/dailymedian,"% in the median daily number of steps"))
+```
+
+```
+## [1] "There is a variation of 0 % in the mean daily number of steps, and of -0.0110420738066178 % in the median daily number of steps"
+```
+
+As we can see, there is not a large variation in the mean and median values, given the filling strategy we used. Inputting, e.g., the global daily average might have resulted in more impact, but would have given less realistic results, in my opinion.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+To ascertain these differences in the daily activity patterns, we do the following:
+
+1. Create a new factor variable in the (filled-in) dataset, to mark weekdays and weekends (using the format option, which gives the locale-independent number of the weekday from 1 to 7)
+2. We create a 2-graph plot of the average number of steps taken per interval, for weekdays and weekends
+
+
+```r
+numday <- format(filled.data$datetime,format="%u")
+filled.data$day.type <- factor(NA, levels = c("Weekday","Weekend"))
+filled.data[numday=="6" | numday=="7","day.type"] <- "Weekend"
+filled.data[numday!="6" & numday!="7","day.type"] <- "Weekday"
+par(mfrow=c(2,1))
+
+# We calculate the daily averages for each interval
+# First, for the weekday subset
+weekdays <- filled.data[filled.data$day.type=="Weekday",]
+ag3 <- aggregate(steps ~ interval, data=weekdays, FUN="mean")
+plot(ag3$interval,ag3$steps,type="n",xlab="Daily intervals", ylab="# of steps", main="Average daily pattern (weekdays)")
+lines(ag3$interval,ag3$steps)
+
+# And now for the weekends
+weekends <- filled.data[filled.data$day.type=="Weekend",]
+ag4 <- aggregate(steps ~ interval, data=weekends, FUN="mean")
+plot(ag4$interval,ag4$steps,type="n",xlab="Daily intervals", ylab="# of steps", main="Average daily pattern (weekends)")
+lines(ag4$interval,ag4$steps)
+```
+
+![plot of chunk unnamed-chunk-5](figure/unnamed-chunk-5.png) 
+
+We can see that in the **weekdays** the peaks of activity are higher, but overall the activity seems lower, while in the **weekends** the activity is more evenly distributed acros the (waking) hours of the day. Also, on **weekends** the activity starts later in the morning, and extends until later on in the evening.
